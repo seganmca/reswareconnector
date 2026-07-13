@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	 <PropertyGroup>
+	  <TargetFramework>net9.0</TargetFramework>
+	  <Nullable>enable</Nullable>
+	  <ImplicitUsings>enable</ImplicitUsings>
+	  <UserSecretsId>6aa233bd-d25c-400e-a3e5-65c91e50359c</UserSecretsId>
+	  <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+      <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+	  <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>	
+	</PropertyGroup>
+	
+	<ItemGroup>
+	  <!-- Microsoft.AspNetCore packages - use consistent versions -->
+	  <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+	  <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
+	  <PackageReference Include="Aspire.MySqlConnector" Version="13.0.1" />
+	  <PackageReference Include="AspNetCore.HealthChecks.MySql" Version="9.0.0" />
+	  <PackageReference Include="AspNetCore.HealthChecks.UI" Version="9.0.0" />
+	  <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
+	  <PackageReference Include="AspNetCore.HealthChecks.UI.InMemory.Storage" Version="9.0.0" />
+	  <PackageReference Include="FluentValidation" Version="12.1.1" />
+	  <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+	  <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="9.0.7" />
+	  <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.7" />
+	  
+	  <!-- Entity Framework Core packages - CRITICAL for migrations -->
+	  <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.7" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.7">
+		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		<PrivateAssets>all</PrivateAssets>
+	  </PackageReference>
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.7" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.7">
+		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		<PrivateAssets>all</PrivateAssets>
+	  </PackageReference>
+	  
+	  <!-- MySQL Provider -->
+	  
+	  <!-- Other packages with consistent versions -->
+	  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.7" />
+	  <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.0.0" />
+	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+	  <PackageReference Include="MySql.EntityFrameworkCore" Version="9.0.6" />
+	  <PackageReference Include="Polly" Version="8.6.5" />
+	  <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+	  <PackageReference Include="Refit" Version="8.0.0" />
+	  <PackageReference Include="Refit.HttpClientFactory" Version="8.0.0" />
+	  <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+	  <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+	  <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+	  <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+	  
+	  <PackageReference Include="System.ServiceModel.Primitives" Version="8.1.2" />
+	  <PackageReference Include="System.ServiceModel.Http" Version="8.1.2" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,4 @@
+﻿namespace ReswareConnectorWeb.Enums
+{
+
+}
