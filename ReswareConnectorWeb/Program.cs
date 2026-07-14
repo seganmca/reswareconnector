@@ -73,6 +73,12 @@ internal class Program
                     UserNameVariable = configuration?.ReceiveSearchDataService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:UserNameVariable is required"),
                     PasswordVariable = configuration?.ReceiveSearchDataService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:PasswordVariable is required"),
                 };
+                options.CustomFieldService = new ServiceConfiguration
+                {
+                    ServiceUrl = configuration?.CustomFieldService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:ServiceUrl is required"),
+                    UserNameVariable = configuration?.CustomFieldService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:UserNameVariable is required"),
+                    PasswordVariable = configuration?.CustomFieldService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:PasswordVariable is required"),
+                };
             });
             // Configure retry policies
             builder.Services.Configure<RetryPolicyConfig>(

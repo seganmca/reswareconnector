@@ -109,7 +109,8 @@ namespace ReswareConnectorWeb.Controllers
                 {
                     SendNoteData = order.SendNoteData,
                     SendSearchData = order.SendSearchData,
-                    SendActionEventData = order.SendActionEventData
+                    SendActionEventData = order.SendActionEventData,
+                    FileID = order.FileID
                 };
 
                 // Deserialize NoteData with enum converter
@@ -126,7 +127,7 @@ namespace ReswareConnectorWeb.Controllers
                 // Deserialize other data
                 if (order.SearchData != null && searchDataJson != null)
                 {
-                    validatedOrder.SearchData = JsonSerializer.Deserialize<ReceiveSearchDataData>(searchDataJson, _jsonOptions);
+                    validatedOrder.SearchData = JsonSerializer.Deserialize<ReceiveSearchDataDataDto>(searchDataJson, _jsonOptions);
                 }
 
                 if (order.ActionEventData != null && actionEventDataJson != null)

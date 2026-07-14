@@ -1,5 +1,6 @@
 ﻿using ActionEventServiceNS;
 using ReceiveNoteServiceNS;
+using ReswareConnectorWeb.CustomeFieldServiceNS;
 using SearchDataServiceNS;
 
 namespace ReswareConnectorWeb.ReswareServices
@@ -9,5 +10,6 @@ namespace ReswareConnectorWeb.ReswareServices
         ReceiveNoteServiceClient CreateReceiveNoteServiceClient();
         ReceiveActionEventServiceClient CreateReceiveActionEventServiceClient();
         ReceiveSearchDataServiceClient CreateReceiveSearchDataServiceClient();
+        ICustomFieldServiceClient CreateCustomFieldServiceClient();
     }
 }

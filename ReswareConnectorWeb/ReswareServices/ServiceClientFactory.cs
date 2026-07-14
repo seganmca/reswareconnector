@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Options;
 using ReceiveNoteServiceNS;
 using ReswareConnectorWeb.Config;
+using ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS;
+using ReswareConnectorWeb.CustomeFieldServiceNS;
 using ReswareConnectorWeb.Services;
 using SearchDataServiceNS;
 
@@ -51,6 +53,14 @@ namespace ReswareConnectorWeb.ReswareServices
             ConfigureClientCredentials(client.ClientCredentials, username, password);
 
             return client;
+        }
+
+        public ICustomFieldServiceClient CreateCustomFieldServiceClient()
+        {
+            var config = _options.CustomFieldService;
+            var (username, password) = GetUserNamePassword(config);
+
+            return new CustomFieldServiceClient(config.ServiceUrl, username, password);
         }
 
         private (string, string) GetUserNamePassword(ServiceConfiguration config)

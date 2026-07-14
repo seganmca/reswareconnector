@@ -5,5 +5,6 @@
         IReceiveNoteServiceWrapper CreateReceiveNoteService();
         IReceiveActionEventServiceWrapper CreateReceiveActionEventService();
         IReceiveSearchDataServiceWrapper CreateReceiveSearchDataService();
+        ICustomFieldServiceWrapper CreateCustomFieldService();
     }
 }

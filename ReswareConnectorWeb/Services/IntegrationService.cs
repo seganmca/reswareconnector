@@ -1,5 +1,6 @@
 ﻿using ActionEventServiceNS;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32.SafeHandles;
 using Mysqlx.Crud;
 using OrderPlacementServiceNS;
 using Org.BouncyCastle.Asn1.Ocsp;
@@ -52,10 +53,12 @@ namespace ReswareConnectorWeb.Services
         public async Task<OrderResponseDto> PostOrderAsync(OrderDto order)
         {
             Transaction transaction;
-            TransactionItem? noteTrxnItem = null, searchTrxnItem = null, eventTrxnItem = null;
+            TransactionItem? noteTrxnItem = null, searchTrxnItem = null, eventTrxnItem = null, customFieldsTrxnItem = null;
             List<TransactionResponse> trxnResponses = new List<TransactionResponse>();
+            bool customFieldsUpdated = true ;
+            FileCustomFields? customFields = null;
 
-            OrderResponseDto orderResponse = new OrderResponseDto();
+           OrderResponseDto orderResponse = new OrderResponseDto();
             orderResponse.FileNumber = (order.SendNoteData ? order.NoteData?.FileNumber : (order.SendSearchData ? order.SearchData?.FileNumber : order.ActionEventData?.FileNumber)) ?? "";
             try
             {
@@ -85,6 +88,24 @@ namespace ReswareConnectorWeb.Services
                         Processed = false,
                     };
                     transaction.Items.Add(searchTrxnItem);
+
+                    if (order.SearchData != null)
+                    {
+                        customFields = ExtractCustomFields(order.SearchData);
+                        if (customFields != null && customFields.CustomFields.Any())
+                        {
+                            if (order.FileID <= 0)
+                            {
+                                throw new ArgumentException($"Invalid FileID {order.FileID}, CustomField API Requires Valid FileID");
+                            }
+                            customFieldsTrxnItem = new TransactionItem
+                            {
+                                TransactionTypeId = (byte)TransactionTypeEnum.CustomFields,
+                                Processed = false,
+                            };
+                            transaction.Items.Add(customFieldsTrxnItem);
+                        }
+                    }
                 }
                 if (order.SendActionEventData)
                 {
@@ -104,7 +125,32 @@ namespace ReswareConnectorWeb.Services
                 _logger.LogError(ex, "Failed to store order request for {FileNumber}. Error: {Message}", orderResponse.FileNumber, ex.Message);
                 throw;
             }
-            if (order.SendNoteData && noteTrxnItem != null)
+
+            if (customFieldsTrxnItem != null)
+            {
+                try
+                {
+                    customFieldsUpdated = false;
+                    using var serviceWrapper = _serviceWrapperFactory.CreateCustomFieldService();
+                    customFieldsUpdated = await SendCustomFieldsAsync(serviceWrapper, order, customFieldsTrxnItem.TransactionItemId, customFields!);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to update customfields for file id {FileID}. Error: {Message}", order.FileID, ex.Message);
+                }
+                var trxnResponse = new TransactionResponse
+                {
+                    TransactionItemId = customFieldsTrxnItem.TransactionItemId,
+                    ResponseCode = 0,
+                    ResponseMessage = "CustomFields Updated",
+                    ReceivedTime = DateTime.Now
+                };
+                trxnResponses.Add(trxnResponse);
+                orderResponse.CustomFieldsUpdated = customFieldsUpdated;
+                customFieldsTrxnItem.Processed = customFieldsUpdated;
+            }
+
+            if (customFieldsUpdated && order.SendNoteData && noteTrxnItem != null)
             {
                 using var serviceWrapper = _serviceWrapperFactory.CreateReceiveNoteService();
                 orderResponse.NoteDataResponse = await SendNoteDataAsync(serviceWrapper, order, noteTrxnItem.TransactionItemId);
@@ -129,7 +175,7 @@ namespace ReswareConnectorWeb.Services
             }
             else orderResponse.NoteDataResponse = null;
 
-            if (order.SendSearchData && searchTrxnItem != null)
+            if (customFieldsUpdated && order.SendSearchData && searchTrxnItem != null)
             {
                 using var serviceWrapper = _serviceWrapperFactory.CreateReceiveSearchDataService();
                 orderResponse.SearchDataResponse = await SendSearchDataAsync(serviceWrapper, order, searchTrxnItem.TransactionItemId);
@@ -154,7 +200,7 @@ namespace ReswareConnectorWeb.Services
             }
             else orderResponse.SearchDataResponse = null;
 
-            if (order.SendActionEventData && eventTrxnItem != null && order.ActionEventData != null)
+            if (customFieldsUpdated && order.SendActionEventData && eventTrxnItem != null && order.ActionEventData != null)
             {
                 using var serviceWrapper = _serviceWrapperFactory.CreateReceiveActionEventService();
                 orderResponse.ActionEventResponse = await SendActionEventAsync(serviceWrapper, order.ActionEventData, eventTrxnItem.TransactionItemId);
@@ -181,10 +227,16 @@ namespace ReswareConnectorWeb.Services
 
             try
             {
-                transaction.Processed = (noteTrxnItem == null || (noteTrxnItem != null && noteTrxnItem.Processed))
+                transaction.Processed = (customFieldsTrxnItem == null || (customFieldsTrxnItem != null && customFieldsTrxnItem.Processed))
+                                    && (noteTrxnItem == null || (noteTrxnItem != null && noteTrxnItem.Processed))
                                     && (searchTrxnItem == null || (searchTrxnItem != null && searchTrxnItem.Processed))
                                     && (eventTrxnItem == null || (eventTrxnItem != null && eventTrxnItem.Processed));
 
+                if (customFieldsTrxnItem != null)
+                {
+                    customFieldsTrxnItem.ResponseSent = true;
+                    customFieldsTrxnItem.LastUpdatedTime = DateTime.Now;
+                }
                 if (noteTrxnItem != null)
                 {
                     noteTrxnItem.ResponseSent = true;
@@ -209,6 +261,73 @@ namespace ReswareConnectorWeb.Services
                 _logger.LogError(ex, "Failed to save response status to table for {FileNumber} transaction Id {TransactionId}. Error: {Message}", orderResponse.FileNumber, transaction.TransactionId, ex.Message);
             }
             return orderResponse;
+        }
+
+        private FileCustomFields ExtractCustomFields(ReceiveSearchDataDataDto searchData)
+        {
+            var customFields = new FileCustomFields { CustomFields = new List<CustomField>() };
+            if (searchData != null)
+            {
+                //Extract custom fields from Easement Data
+                var easementsWithCustomData = searchData.Easements?.Where(d => d.DocumentTypeID == 1443);
+                if (easementsWithCustomData != null && easementsWithCustomData.Any())
+                {
+                    var updatedEasements = searchData.Easements.ToList();
+                    foreach (var document in easementsWithCustomData)
+                    {
+                        var customField = new CustomField
+                        {
+                            Name = $"{document.CustomFieldName}",
+                            Value = $"{document.Language}",
+                        };
+                        customFields.CustomFields.Add(customField);
+                        updatedEasements.Remove(document);
+                    }
+                    searchData.Easements = updatedEasements.ToArray();
+                }
+                //Extract custom fields from Lien Data
+                var liensWithCustomData = searchData.Liens?.Where(d => d.DocumentTypeID == 1443);
+                if (liensWithCustomData != null && liensWithCustomData.Any())
+                {
+                    var updatedLiens = searchData.Liens.ToList();
+                    foreach (var document in liensWithCustomData)
+                    {
+                        var customField = new CustomField
+                        {
+                            Name = $"{document.CustomFieldName}",
+                            Value = $"{document.Language}",
+                        };
+                        customFields.CustomFields.Add(customField);
+                        updatedLiens.Remove(document);
+                    }
+                    searchData.Liens = updatedLiens.ToArray();
+                }
+            }
+            return customFields;
+        }
+
+        private async Task<bool> SendCustomFieldsAsync(ICustomFieldServiceWrapper serviceWrapper, OrderDto order, long trxnItemId, FileCustomFields? customFields = null)
+        {
+            bool customFieldsUpdated = false;
+            try
+            {
+                if (order != null)
+                {
+                    if (customFields == null && order.SearchData != null)
+                    {
+                        customFields = ExtractCustomFields(order.SearchData);
+                    }
+                    if (customFields != null && customFields.CustomFields.Any())
+                    {
+                        customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID, customFields);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed sending custom fields for FileID : {FileID}. Error: {Message}", order.FileID, ex.Message);
+            }
+            return customFieldsUpdated;
         }
 
         private async Task<ReceiveNoteResponseDto> SendNoteDataAsync(IReceiveNoteServiceWrapper serviceWrapper, OrderDto order, long trxnItemId)
@@ -268,7 +387,9 @@ namespace ReswareConnectorWeb.Services
                 var fileNumber = order.SearchData?.FileNumber ?? "UnknownFileNumber";
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, order.SearchData, TransactionTypeEnum.SearchData, true);
 
-                ReceiveSearchDataResponse response = await serviceWrapper.ReceiveSearchDataAsync(order.SearchData);
+                var searchData = SearchDataMapper.MapToReceiveSearchDataData(order.SearchData);
+
+                ReceiveSearchDataResponse response = await serviceWrapper.ReceiveSearchDataAsync(searchData);
 
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, response, TransactionTypeEnum.SearchData, false);
 
@@ -699,7 +820,7 @@ namespace ReswareConnectorWeb.Services
                     query = query.Where(t => t.ReceivedTime > cutoffReceivedTime);
                 }
 
-                transactions = await query.ToListAsync();
+                transactions = await query.OrderBy(t => t.FileNumber).ThenBy(t=> t.TransactionTypeId).ToListAsync();
             }
             catch (Exception ex)
             {
@@ -707,6 +828,7 @@ namespace ReswareConnectorWeb.Services
                 return;
             }
 
+            Lazy<ICustomFieldServiceWrapper> customFieldServiceWrapper = new Lazy<ICustomFieldServiceWrapper>(() => _serviceWrapperFactory.CreateCustomFieldService());
             Lazy<IReceiveNoteServiceWrapper> noteServiceWrapper = new Lazy<IReceiveNoteServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveNoteService());
             Lazy<IReceiveSearchDataServiceWrapper> searchServiceWrapper = new Lazy<IReceiveSearchDataServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveSearchDataService());
             Lazy<IReceiveActionEventServiceWrapper> eventServiceWrapper = new Lazy<IReceiveActionEventServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveActionEventService());
@@ -720,7 +842,30 @@ namespace ReswareConnectorWeb.Services
                     bool isProcessed = false;
                     bool isResponseSent = false;
 
-                    if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.NoteDocument)
+                    if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.CustomFields)
+                    {
+                        try
+                        {
+                            var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                            var response = await SendCustomFieldsAsync(customFieldServiceWrapper.Value, request, transactionItem.TransactionItemId);
+
+                            var txResponse = new TransactionResponse
+                            {
+                                TransactionItemId = transactionItem.TransactionItemId,
+                                ResponseCode = response ? 0 : -1,
+                                ResponseMessage = response ? "CustomFields Updated" : "CustomFields Updated Failed",
+                                ReceivedTime = DateTime.Now
+                            };
+                            _dbContext.TransactionResponses.Add(txResponse);
+                            isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.CustomFields, txResponse);
+                            isProcessed = response;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"Error while reprocessing CustomFields Update request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
+                        }
+                    }
+                    else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.NoteDocument)
                     {
                         try
                         {
@@ -748,6 +893,10 @@ namespace ReswareConnectorWeb.Services
                         try
                         {
                             var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                            if (request != null && request.SearchData != null)
+                            {
+                                ExtractCustomFields(request.SearchData);//Updates the original Search data by removing CustomField related Liens and Easements
+                            }
                             var response = await SendSearchDataAsync(searchServiceWrapper.Value, request, transactionItem.TransactionItemId);
 
                             var txResponse = new TransactionResponse
@@ -812,6 +961,9 @@ namespace ReswareConnectorWeb.Services
             }
             finally
             {
+                if (customFieldServiceWrapper.IsValueCreated)
+                    customFieldServiceWrapper.Value.Dispose();
+
                 if (noteServiceWrapper.IsValueCreated)
                     noteServiceWrapper.Value.Dispose();
 

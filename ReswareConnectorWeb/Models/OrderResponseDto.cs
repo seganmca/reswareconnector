@@ -10,6 +10,7 @@ namespace ReswareConnectorWeb.Models
         public List<ValidationError>? ValidationErrors { get; set; } = null;
         public ReceiveNoteResponseDto? NoteDataResponse { get; set; } = null;
         public ReceiveSearchDataResponseDto? SearchDataResponse { get; set; } = null;
+        public bool? CustomFieldsUpdated { get; set; } = null;
         public ReceiveActionEventResponseDto? ActionEventResponse { get; set; } = null;
         public OrderResponseDto()
         {

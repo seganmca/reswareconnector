@@ -37,7 +37,13 @@ namespace ReswareConnectorWeb.ReswareServices
             _disposables.Add(wrapper);
             return wrapper;
         }
-        // Add other service creation methods following the same pattern
+
+        public ICustomFieldServiceWrapper CreateCustomFieldService()
+        {
+            var wrapper = new CustomFieldServiceWrapper(_clientFactory, _retryPolicyService);
+            _disposables.Add(wrapper);
+            return wrapper;
+        }
 
         public void Dispose()
         {
