@@ -13,6 +13,6 @@ namespace ReswareConnectorWeb.Models
         public bool SendNoteData { get; set; }
         public bool SendSearchData { get; set; }
         public bool SendActionEventData { get; set; }
-        public long FileID { get; set; }
+        public long? FileID { get; set; }
     }
 }

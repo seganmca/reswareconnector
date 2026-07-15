@@ -98,7 +98,7 @@ namespace ReswareConnectorWeb.Services
                         customFields = ExtractCustomFields(order.SearchData);
                         if (customFields != null && customFields.CustomFields.Any())
                         {
-                            if (order.FileID <= 0)
+                            if (!order.FileID.HasValue || order.FileID <= 0)
                             {
                                 throw new ArgumentException($"Invalid FileID {order.FileID}, CustomField API Requires Valid FileID");
                             }
@@ -315,7 +315,7 @@ namespace ReswareConnectorWeb.Services
             bool customFieldsUpdated = false;
             try
             {
-                if (order != null)
+                if (order != null && order.FileID.HasValue)
                 {
                     if (customFields == null && order.SearchData != null)
                     {
@@ -327,7 +327,7 @@ namespace ReswareConnectorWeb.Services
                         {
                             return true;
                         }
-                        customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID, customFields);
+                        customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID.Value, customFields);
                     }
                 }
             }
