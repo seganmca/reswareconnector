@@ -1,5 +1,6 @@
 ﻿using ActionEventServiceNS;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
 using Mysqlx.Crud;
 using OrderPlacementServiceNS;
@@ -35,16 +36,19 @@ namespace ReswareConnectorWeb.Services
         private readonly ReswareConnectorDbContext _dbContext;
         private readonly ILogger<FileStorageService> _logger;
         private readonly ITitleHubApi _titleHubApi;
+        private readonly IOptions<ServiceClientOptions> _options;
         public IntegrationService(IServiceWrapperFactory serviceWrapperFactory, 
                     IFileStorageService fileStorageService, 
                     ReswareConnectorDbContext reswareConnectorDbContext,
                     ITitleHubApi titleHubApi,
+                    IOptions<ServiceClientOptions> options,
                     ILogger<FileStorageService> logger)
         {
             _serviceWrapperFactory = serviceWrapperFactory;
             _fileStorageService = fileStorageService;
             _dbContext = reswareConnectorDbContext;
             _titleHubApi = titleHubApi;
+            _options = options;
             _logger = logger;
         }
 
@@ -319,6 +323,10 @@ namespace ReswareConnectorWeb.Services
                     }
                     if (customFields != null && customFields.CustomFields.Any())
                     {
+                        if(_options.Value.CustomFieldService.BypassServiceCall)
+                        {
+                            return true;
+                        }
                         customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID, customFields);
                     }
                 }

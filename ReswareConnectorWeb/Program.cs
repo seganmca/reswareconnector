@@ -78,6 +78,7 @@ internal class Program
                     ServiceUrl = configuration?.CustomFieldService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:ServiceUrl is required"),
                     UserNameVariable = configuration?.CustomFieldService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:UserNameVariable is required"),
                     PasswordVariable = configuration?.CustomFieldService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:PasswordVariable is required"),
+                    BypassServiceCall = configuration?.CustomFieldService.BypassServiceCall ?? false,
                 };
             });
             // Configure retry policies
