@@ -277,7 +277,7 @@ namespace ReswareConnectorWeb.Services
                     {
                         var customField = new CustomField
                         {
-                            Name = $"{document.CustomFieldName}",
+                            Name = $"{document.EasementTypeName}",
                             Value = $"{document.Language}",
                         };
                         customFields.CustomFields.Add(customField);
@@ -294,7 +294,7 @@ namespace ReswareConnectorWeb.Services
                     {
                         var customField = new CustomField
                         {
-                            Name = $"{document.CustomFieldName}",
+                            Name = $"{document.LienTypeName}",
                             Value = $"{document.Language}",
                         };
                         customFields.CustomFields.Add(customField);

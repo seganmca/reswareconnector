@@ -120,8 +120,6 @@
         public int? EasementID { get; set; }
         public int? EasementTypeID { get; set; }
         public string EasementTypeName { get; set; }
-        public string CustomFieldName { get; set; }
-
     }
 
     public class ReceiveSearchDataLienDto : ReceiveSearchDataLienRequirementBaseDto
@@ -130,7 +128,6 @@
         public int? LienID { get; set; }
         public int? LienTypeID { get; set; }
         public string LienTypeName { get; set; }
-        public string CustomFieldName { get; set; }
     }
 
     public class ReceiveSearchDataRequirementDto : ReceiveSearchDataLienRequirementBaseDto
