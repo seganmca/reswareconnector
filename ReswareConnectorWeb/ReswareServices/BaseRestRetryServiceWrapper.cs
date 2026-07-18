@@ -10,17 +10,14 @@ namespace ReswareConnectorWeb.ReswareServices
         private bool _disposed = false;
         protected TClient _client;
         private readonly Func<TClient> _clientFactory;
-        private readonly ILogger _logger;
- 
+
         protected BaseRestRetryServiceWrapper(
             Func<TClient> clientFactory,
-            IRetryPolicyService retryPolicyService,
-            ILogger logger)
+            IRetryPolicyService retryPolicyService)
         {
             _clientFactory = clientFactory;
             _retryPolicyService = retryPolicyService;
             _client = _clientFactory();
-            _logger = logger;
         }
 
         protected async Task<TResult> ExecuteWithRetryAsync<TResult>(

@@ -1,6 +1,5 @@
 ﻿using ReceiveNoteServiceNS;
 using ReswareConnectorWeb.RetryServices;
-using ReswareConnectorWeb.Services;
 using SearchDataServiceNS;
 using System.ServiceModel;
 
@@ -9,15 +8,17 @@ namespace ReswareConnectorWeb.ReswareServices
     public class ReceiveSearchDataServiceWrapper : BaseRetryServiceWrapper<ReceiveSearchDataServiceClient>, IReceiveSearchDataServiceWrapper, IDisposable
     {
         public ReceiveSearchDataServiceWrapper(
-            ReceiveSearchDataServiceClient client,
-            ILogger<IntegrationService> logger)
-            : base(client, logger)
+            IServiceClientFactory clientFactory,
+            IRetryPolicyService retryPolicyService)
+            : base(()=> clientFactory.CreateReceiveSearchDataServiceClient(), retryPolicyService)
         {
         }
 
         public async Task<ReceiveSearchDataResponse> ReceiveSearchDataAsync(ReceiveSearchDataData SearchData)
         {
-            return await _client.ReceiveSearchDataAsync(SearchData);
+            return await ExecuteWithRetryAsync(
+                          () => _client.ReceiveSearchDataAsync(SearchData),
+                          channel => channel != null && channel.State != CommunicationState.Faulted);
         }
     }
 }

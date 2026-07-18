@@ -10,42 +10,6 @@
       <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
 	  <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>	
 	</PropertyGroup>
-
-	 <ItemGroup>
-	   <Compile Remove="ReswareServices\BaseRestRetryServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\BaseRetryServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\BaseServiceClientFactory.cs" />
-	   <Compile Remove="ReswareServices\CustomFieldServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\ICustomFieldServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\IReceiveActionEventServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\IReceiveNoteServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\IReceiveSearchDataServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\IServiceClientFactory.cs" />
-	   <Compile Remove="ReswareServices\IServiceWrapperFactory.cs" />
-	   <Compile Remove="ReswareServices\ReceiveActionEventServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\ReceiveNoteServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\ReceiveSearchDataServiceWrapper.cs" />
-	   <Compile Remove="ReswareServices\ServiceClientFactory.cs" />
-	   <Compile Remove="ReswareServices\ServiceWrapperFactory.cs" />
-	 </ItemGroup>
-
-	 <ItemGroup>
-	   <None Include="ReswareServices\BaseRestRetryServiceWrapper.cs" />
-	   <None Include="ReswareServices\BaseRetryServiceWrapper.cs" />
-	   <None Include="ReswareServices\BaseServiceClientFactory.cs" />
-	   <None Include="ReswareServices\CustomFieldServiceWrapper.cs" />
-	   <None Include="ReswareServices\ICustomFieldServiceWrapper.cs" />
-	   <None Include="ReswareServices\IReceiveActionEventServiceWrapper.cs" />
-	   <None Include="ReswareServices\IReceiveNoteServiceWrapper.cs" />
-	   <None Include="ReswareServices\IReceiveSearchDataServiceWrapper.cs" />
-	   <None Include="ReswareServices\IServiceClientFactory.cs" />
-	   <None Include="ReswareServices\IServiceWrapperFactory.cs" />
-	   <None Include="ReswareServices\ReceiveActionEventServiceWrapper.cs" />
-	   <None Include="ReswareServices\ReceiveNoteServiceWrapper.cs" />
-	   <None Include="ReswareServices\ReceiveSearchDataServiceWrapper.cs" />
-	   <None Include="ReswareServices\ServiceClientFactory.cs" />
-	   <None Include="ReswareServices\ServiceWrapperFactory.cs" />
-	 </ItemGroup>
 	
 	<ItemGroup>
 	  <!-- Microsoft.AspNetCore packages - use consistent versions -->

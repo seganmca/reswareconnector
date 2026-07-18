@@ -1,25 +1,21 @@
 ﻿using ReswareConnectorWeb.Config;
-using ReswareConnectorWeb.Services;
-using System.ServiceModel;
 using System.ServiceModel.Channels;
 using System.ServiceModel.Security;
+using System.ServiceModel;
 
 namespace ReswareConnectorWeb.ReswareServices
 {
     public abstract class BaseServiceClientFactory
     {
         protected readonly ServiceClientOptions _options;
-        protected readonly ILogger<IntegrationService> _logger;
 
-        protected BaseServiceClientFactory(ServiceClientOptions options, ILogger<IntegrationService> logger)
+        protected BaseServiceClientFactory(ServiceClientOptions options)
         {
             _options = options;
-            _logger = logger;
         }
 
         protected virtual CustomBinding CreateBinding()
         {
-            _logger.LogInformation("CreateBinding");
             // 1. Bootstrap: UserName over HTTPS
             var bootstrap = SecurityBindingElement.CreateUserNameOverTransportBindingElement();
             bootstrap.IncludeTimestamp = true;
@@ -58,14 +54,8 @@ namespace ReswareConnectorWeb.ReswareServices
 
         protected virtual void ConfigureClientCredentials(System.ServiceModel.Description.ClientCredentials credentials, string username, string password)
         {
-            var certificate = credentials?.ClientCertificate?.Certificate;
-            if (certificate != null)
-            {
-                _logger.LogInformation("ConfigureClientCredentials. FriendlyName : {FriendlyName}, Version : {Version}, IssuerName : {IssuerName}, MatchesHostname : {MatchesHostname}", certificate.FriendlyName, certificate.Version, certificate.IssuerName, certificate.MatchesHostname);
-            }
             credentials.UserName.UserName = username;
             credentials.UserName.Password = password;
-            _logger.LogInformation("ConfigureClientCredentials. UserName : {UserName}, Password : {Password}", username, password);
         }
     }
 }
