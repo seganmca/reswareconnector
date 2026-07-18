@@ -2,16 +2,19 @@
 using System.ServiceModel.Channels;
 using System.ServiceModel.Security;
 using System.ServiceModel;
+using ReswareConnectorWeb.Services;
 
 namespace ReswareConnectorWeb.ReswareServices
 {
     public abstract class BaseServiceClientFactory
     {
         protected readonly ServiceClientOptions _options;
+        protected readonly ILogger<IntegrationService> _logger;
 
-        protected BaseServiceClientFactory(ServiceClientOptions options)
+        protected BaseServiceClientFactory(ServiceClientOptions options, ILogger<IntegrationService> _logger)
         {
             _options = options;
+            _logger = _logger;
         }
 
         protected virtual CustomBinding CreateBinding()

@@ -4,6 +4,7 @@ using ReceiveNoteServiceNS;
 using ReswareConnectorWeb.Config;
 using ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS;
 using ReswareConnectorWeb.CustomeFieldServiceNS;
+using ReswareConnectorWeb.Helpers;
 using ReswareConnectorWeb.Services;
 using SearchDataServiceNS;
 
@@ -11,8 +12,8 @@ namespace ReswareConnectorWeb.ReswareServices
 {
     public class ServiceClientFactory : BaseServiceClientFactory, IServiceClientFactory
     {
-        public ServiceClientFactory(IOptions<ServiceClientOptions> options)
-                    : base(options.Value) 
+        public ServiceClientFactory(IOptions<ServiceClientOptions> options, ILogger<IntegrationService> logger)
+                    : base(options.Value, logger) 
         {
         }
 
@@ -25,6 +26,12 @@ namespace ReswareConnectorWeb.ReswareServices
             var client = new ReceiveNoteServiceClient(binding, endpointAddress);
             var (username, password) = GetUserNamePassword(config);
             ConfigureClientCredentials(client.ClientCredentials, username, password);
+
+            if(config.LogSoapMessages)
+            {
+                var behavior = new SoapLoggerBehavior(_logger);
+                client.Endpoint.EndpointBehaviors.Add(behavior);
+            }
 
             return client;
         }
@@ -39,6 +46,12 @@ namespace ReswareConnectorWeb.ReswareServices
             var (username, password) = GetUserNamePassword(config);
             ConfigureClientCredentials(client.ClientCredentials, username, password);
 
+            if (config.LogSoapMessages)
+            {
+                var behavior = new SoapLoggerBehavior(_logger);
+                client.Endpoint.EndpointBehaviors.Add(behavior);
+            }
+
             return client;
         }
 
@@ -52,6 +65,11 @@ namespace ReswareConnectorWeb.ReswareServices
             var (username, password) = GetUserNamePassword(config);
             ConfigureClientCredentials(client.ClientCredentials, username, password);
 
+            if (config.LogSoapMessages)
+            {
+                var behavior = new SoapLoggerBehavior(_logger);
+                client.Endpoint.EndpointBehaviors.Add(behavior);
+            }
             return client;
         }
 

@@ -25,6 +25,11 @@ namespace ReswareConnectorWeb.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            if (!_config.Enabled)
+            {
+                _logger.LogInformation("Async Periodic Background Service is Disabled.");
+                return;
+            }
             _logger.LogInformation("Async Periodic Background Service is starting.");
             _serviceHealth.ReportSuccess();
             // Wait a bit before starting to allow the application to fully start
