@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using ReswareConnectorWeb.Config;
-using ReswareConnectorWeb.Extensions;
 using ReswareConnectorWeb.Security;
-using ReswareConnectorWeb.ReswareServices;
 using ReswareConnectorWeb.Services;
 using Microsoft.EntityFrameworkCore;
 using ReswareConnectorWeb.Data;
@@ -60,25 +58,32 @@ internal class Program
                     ServiceUrl = configuration?.ReceiveNoteService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveNoteService:ServiceUrl is required"),
                     UserNameVariable = configuration?.ReceiveNoteService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveNoteService:UserNameVariable is required"),
                     PasswordVariable = configuration?.ReceiveNoteService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveNoteService:PasswordVariable is required"),
+                    BypassServiceCall = configuration?.CustomFieldService.BypassServiceCall ?? false,
+                    LogSoapMessages = configuration?.CustomFieldService.LogSoapMessages ?? false,
                 };
                 options.ReceiveActionEventService = new ServiceConfiguration
                 {
                     ServiceUrl = configuration?.ReceiveActionEventService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveActionEventService:ServiceUrl is required"),
                     UserNameVariable = configuration?.ReceiveActionEventService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveActionEventService:UserNameVariable is required"),
                     PasswordVariable = configuration?.ReceiveActionEventService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveActionEventService:PasswordVariable is required"),
+                    BypassServiceCall = configuration?.CustomFieldService.BypassServiceCall ?? false,
+                    LogSoapMessages = configuration?.CustomFieldService.LogSoapMessages ?? false,
                 };
                 options.ReceiveSearchDataService = new ServiceConfiguration
                 {
                     ServiceUrl = configuration?.ReceiveSearchDataService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:ServiceUrl is required"),
                     UserNameVariable = configuration?.ReceiveSearchDataService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:UserNameVariable is required"),
                     PasswordVariable = configuration?.ReceiveSearchDataService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:PasswordVariable is required"),
+                    BypassServiceCall = configuration?.CustomFieldService.BypassServiceCall ?? false,
+                    LogSoapMessages = configuration?.CustomFieldService.LogSoapMessages ?? false,
                 };
                 options.CustomFieldService = new ServiceConfiguration
                 {
-                    ServiceUrl = configuration?.CustomFieldService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:ServiceUrl is required"),
-                    UserNameVariable = configuration?.CustomFieldService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:UserNameVariable is required"),
-                    PasswordVariable = configuration?.CustomFieldService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:ReceiveSearchDataService:PasswordVariable is required"),
+                    ServiceUrl = configuration?.CustomFieldService.ServiceUrl ?? throw new ArgumentNullException("ServiceClients:CustomFieldService:ServiceUrl is required"),
+                    UserNameVariable = configuration?.CustomFieldService.UserNameVariable ?? throw new ArgumentNullException("ServiceClients:CustomFieldService:UserNameVariable is required"),
+                    PasswordVariable = configuration?.CustomFieldService.PasswordVariable ?? throw new ArgumentNullException("ServiceClients:CustomFieldService:PasswordVariable is required"),
                     BypassServiceCall = configuration?.CustomFieldService.BypassServiceCall ?? false,
+                    LogSoapMessages = configuration?.CustomFieldService.LogSoapMessages ?? false,
                 };
             });
             // Configure retry policies
@@ -86,9 +91,9 @@ internal class Program
                 builder.Configuration.GetSection("RetryPolicyConfig"));
 
             // 3. Register Core Services
-            builder.Services.AddSingleton<IServiceClientFactory, ServiceClientFactory>();
-            builder.Services.AddSingleton<IRetryPolicyService, RetryPolicyService>();
-            builder.Services.AddSingleton<IServiceWrapperFactory, ServiceWrapperFactory>();
+            //builder.Services.AddTransient<IServiceClientFactory, ServiceClientFactory>();
+            //builder.Services.AddTransient<IRetryPolicyService, RetryPolicyService>();
+            //builder.Services.AddTransient<IServiceWrapperFactory, ServiceWrapperFactory>();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IBackgroundTaskService, BackgroundTaskService>();
             builder.Services.AddHostedService<AsyncPeriodicBackgroundService>();

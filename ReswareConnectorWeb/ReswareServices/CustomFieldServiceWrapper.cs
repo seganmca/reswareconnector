@@ -8,8 +8,9 @@ namespace ReswareConnectorWeb.ReswareServices
     {
         public CustomFieldServiceWrapper(
             IServiceClientFactory clientFactory,
-            IRetryPolicyService retryPolicyService)
-            : base(() => clientFactory.CreateCustomFieldServiceClient(), retryPolicyService)
+            IRetryPolicyService retryPolicyService,
+            ILogger logger)
+            : base(() => clientFactory.CreateCustomFieldServiceClient(), retryPolicyService, logger)
         {
         }
 

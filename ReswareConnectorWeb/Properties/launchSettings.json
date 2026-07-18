@@ -6,7 +6,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "RESWARECONNECTOR_API_KEY": "titlehub",
         "RESWARE_SERVICE_USERNAME": "TitleHub_Integrator",
-        "RESWARE_SERVICE_PASSWORD": "#X3l$#_85$6+fM~%+$!!%"
+        "RESWARE_SERVICE_PASSWORD": "#X3l$#_85$6+fM~%+$!!"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5128",

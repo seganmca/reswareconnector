@@ -3,7 +3,6 @@ using FluentValidation;
 using ReceiveNoteServiceNS;
 using ReswareConnectorWeb.Models;
 using ReswareConnectorWeb.RawDataModels;
-using ReswareConnectorWeb.ReswareServices;
 using SearchDataServiceNS;
 using System.Text.Json;
 using ReswareConnectorWeb.Extensions;

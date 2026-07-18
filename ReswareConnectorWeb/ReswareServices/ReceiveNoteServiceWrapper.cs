@@ -1,5 +1,7 @@
-﻿using ReceiveNoteServiceNS;
+﻿using ActionEventServiceNS;
+using ReceiveNoteServiceNS;
 using ReswareConnectorWeb.RetryServices;
+using ReswareConnectorWeb.Services;
 using System.ServiceModel;
 
 namespace ReswareConnectorWeb.ReswareServices
@@ -7,17 +9,15 @@ namespace ReswareConnectorWeb.ReswareServices
     public class ReceiveNoteServiceWrapper : BaseRetryServiceWrapper<ReceiveNoteServiceClient>, IReceiveNoteServiceWrapper
     {
         public ReceiveNoteServiceWrapper(
-            IServiceClientFactory clientFactory,
-            IRetryPolicyService retryPolicyService)
-            : base(() => clientFactory.CreateReceiveNoteServiceClient(), retryPolicyService)
+            ReceiveNoteServiceClient client,
+            ILogger<IntegrationService> logger)
+            : base(client, logger)
         {
         }
 
         public async Task<ReceiveNoteResponse> ReceiveNoteAsync(ReceiveNoteData noteData)
         {
-            return await ExecuteWithRetryAsync(
-                () => _client.ReceiveNoteAsync(noteData),
-                channel => channel != null && channel.State != CommunicationState.Faulted);
+            return await _client.ReceiveNoteAsync(noteData);
         }
     }
 }

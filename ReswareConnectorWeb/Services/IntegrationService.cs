@@ -10,41 +10,42 @@ using Org.BouncyCastle.Crypto.Macs;
 using ReceiveNoteServiceNS;
 using Refit;
 using ReswareConnectorWeb.Config;
+using ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS;
 using ReswareConnectorWeb.Data;
 using ReswareConnectorWeb.Data.Entities;
 using ReswareConnectorWeb.Enums;
 using ReswareConnectorWeb.Extensions;
+using ReswareConnectorWeb.Helpers;
 using ReswareConnectorWeb.Models;
-using ReswareConnectorWeb.ReswareServices;
 using ReswareConnectorWeb.TitleHub;
 using SearchDataServiceNS;
 using System.Diagnostics;
 using System.DirectoryServices.Protocols;
 using System.Reflection.Metadata;
+using System.ServiceModel;
 using System.ServiceModel.Channels;
+using System.ServiceModel.Security;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using static IdentityModel.OidcConstants;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace ReswareConnectorWeb.Services
 {
     public class IntegrationService : IIntegrationService
     {
-        private readonly IServiceWrapperFactory _serviceWrapperFactory;
         private readonly IFileStorageService _fileStorageService;
         private readonly ReswareConnectorDbContext _dbContext;
-        private readonly ILogger<FileStorageService> _logger;
+        private readonly ILogger<IntegrationService> _logger;
         private readonly ITitleHubApi _titleHubApi;
         private readonly IOptions<ServiceClientOptions> _options;
-        public IntegrationService(IServiceWrapperFactory serviceWrapperFactory, 
-                    IFileStorageService fileStorageService, 
+        public IntegrationService(IFileStorageService fileStorageService, 
                     ReswareConnectorDbContext reswareConnectorDbContext,
                     ITitleHubApi titleHubApi,
                     IOptions<ServiceClientOptions> options,
-                    ILogger<FileStorageService> logger)
+                    ILogger<IntegrationService> logger)
         {
-            _serviceWrapperFactory = serviceWrapperFactory;
             _fileStorageService = fileStorageService;
             _dbContext = reswareConnectorDbContext;
             _titleHubApi = titleHubApi;
@@ -135,8 +136,7 @@ namespace ReswareConnectorWeb.Services
                 try
                 {
                     customFieldsUpdated = false;
-                    using var serviceWrapper = _serviceWrapperFactory.CreateCustomFieldService();
-                    customFieldsUpdated = await SendCustomFieldsAsync(serviceWrapper, order, customFieldsTrxnItem.TransactionItemId, customFields!);
+                    customFieldsUpdated = await SendCustomFieldsAsync(order, customFieldsTrxnItem.TransactionItemId, customFields!);
                 }
                 catch (Exception ex)
                 {
@@ -156,8 +156,7 @@ namespace ReswareConnectorWeb.Services
 
             if (customFieldsUpdated && order.SendNoteData && noteTrxnItem != null)
             {
-                using var serviceWrapper = _serviceWrapperFactory.CreateReceiveNoteService();
-                orderResponse.NoteDataResponse = await SendNoteDataAsync(serviceWrapper, order, noteTrxnItem.TransactionItemId);
+                orderResponse.NoteDataResponse = await SendNoteDataAsync(order, noteTrxnItem.TransactionItemId);
                 try
                 {
                     await _fileStorageService.StoreTransactionResponseDataAsync(orderResponse.NoteDataResponse.OriginalResponse, transaction.DataPath, TransactionTypeEnum.NoteDocument);
@@ -181,8 +180,7 @@ namespace ReswareConnectorWeb.Services
 
             if (customFieldsUpdated && order.SendSearchData && searchTrxnItem != null)
             {
-                using var serviceWrapper = _serviceWrapperFactory.CreateReceiveSearchDataService();
-                orderResponse.SearchDataResponse = await SendSearchDataAsync(serviceWrapper, order, searchTrxnItem.TransactionItemId);
+                orderResponse.SearchDataResponse = await SendSearchDataAsync(order, searchTrxnItem.TransactionItemId);
                 try
                 {
                     await _fileStorageService.StoreTransactionResponseDataAsync(orderResponse.SearchDataResponse.OriginalResponse, transaction.DataPath, TransactionTypeEnum.SearchData);
@@ -206,8 +204,7 @@ namespace ReswareConnectorWeb.Services
 
             if (customFieldsUpdated && order.SendActionEventData && eventTrxnItem != null && order.ActionEventData != null)
             {
-                using var serviceWrapper = _serviceWrapperFactory.CreateReceiveActionEventService();
-                orderResponse.ActionEventResponse = await SendActionEventAsync(serviceWrapper, order.ActionEventData, eventTrxnItem.TransactionItemId);
+                orderResponse.ActionEventResponse = await SendActionEventAsync(order.ActionEventData, eventTrxnItem.TransactionItemId);
                 try
                 {
                     await _fileStorageService.StoreTransactionResponseDataAsync(orderResponse.ActionEventResponse.OriginalResponse, transaction.DataPath, TransactionTypeEnum.ActionEvent);
@@ -310,9 +307,13 @@ namespace ReswareConnectorWeb.Services
             return customFields;
         }
 
-        private async Task<bool> SendCustomFieldsAsync(ICustomFieldServiceWrapper serviceWrapper, OrderDto order, long trxnItemId, FileCustomFields? customFields = null)
+        private async Task<bool> SendCustomFieldsAsync(OrderDto order, long trxnItemId, FileCustomFields? customFields = null)
         {
             bool customFieldsUpdated = false;
+            if (_options.Value.CustomFieldService.BypassServiceCall)
+            {
+                return true;
+            }
             try
             {
                 if (order != null && order.FileID.HasValue)
@@ -323,11 +324,9 @@ namespace ReswareConnectorWeb.Services
                     }
                     if (customFields != null && customFields.CustomFields.Any())
                     {
-                        if(_options.Value.CustomFieldService.BypassServiceCall)
-                        {
-                            return true;
-                        }
-                        customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID.Value, customFields);
+                        var (userName, password) = GetUserNamePassword(_options.Value.ReceiveNoteService);
+                        var client = new CustomFieldServiceClient(_options.Value.CustomFieldService.ServiceUrl, userName, password);
+                        customFieldsUpdated = await client.UpdateCustomFieldsAsync(order.FileID.Value, customFields);
                     }
                 }
             }
@@ -338,9 +337,13 @@ namespace ReswareConnectorWeb.Services
             return customFieldsUpdated;
         }
 
-        private async Task<ReceiveNoteResponseDto> SendNoteDataAsync(IReceiveNoteServiceWrapper serviceWrapper, OrderDto order, long trxnItemId)
+        private async Task<ReceiveNoteResponseDto> SendNoteDataAsync(OrderDto order, long trxnItemId)
         {
             ReceiveNoteResponseDto noteResponse = new();
+            if(_options.Value.ReceiveNoteService.BypassServiceCall)
+            {
+                return noteResponse;
+            }
             try
             {
                 var requestDto = JsonSerializer.Serialize(order.NoteData);
@@ -362,7 +365,18 @@ namespace ReswareConnectorWeb.Services
                     }
                 }
 
-                ReceiveNoteResponse response = await serviceWrapper.ReceiveNoteAsync(request);
+                var binding = CreateBinding();
+                var endpointAddress = CreateEndpointAddress(_options.Value.ReceiveNoteService.ServiceUrl);
+                var client = new ReceiveNoteServiceClient(binding, endpointAddress);
+                if (_options.Value.CustomFieldService.LogSoapMessages)
+                {
+                    var behavior = new SoapLoggerBehavior(_logger);
+                    client.Endpoint.EndpointBehaviors.Add(behavior);
+                }
+                var (userName, password) = GetUserNamePassword(_options.Value.ReceiveNoteService);
+                client.ClientCredentials.UserName.UserName = userName;
+                client.ClientCredentials.UserName.Password = password;
+                var response = await client.ReceiveNoteAsync(request);
 
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, response, TransactionTypeEnum.NoteDocument, false);
 
@@ -387,9 +401,13 @@ namespace ReswareConnectorWeb.Services
             return noteResponse;
         }
 
-        private async Task<ReceiveSearchDataResponseDto> SendSearchDataAsync(IReceiveSearchDataServiceWrapper serviceWrapper, OrderDto order, long trxnItemId)
+        private async Task<ReceiveSearchDataResponseDto> SendSearchDataAsync(OrderDto order, long trxnItemId)
         {
             ReceiveSearchDataResponseDto searchResponse = new();
+            if (_options.Value.ReceiveSearchDataService.BypassServiceCall)
+            {
+                return searchResponse;
+            }
             try
             {
                 var fileNumber = order.SearchData?.FileNumber ?? "UnknownFileNumber";
@@ -397,7 +415,18 @@ namespace ReswareConnectorWeb.Services
 
                 var searchData = SearchDataMapper.MapToReceiveSearchDataData(order.SearchData);
 
-                ReceiveSearchDataResponse response = await serviceWrapper.ReceiveSearchDataAsync(searchData);
+                var binding = CreateBinding();
+                var endpointAddress = CreateEndpointAddress(_options.Value.ReceiveSearchDataService.ServiceUrl);
+                var client = new ReceiveSearchDataServiceClient(binding, endpointAddress);
+                if (_options.Value.CustomFieldService.LogSoapMessages)
+                {
+                    var behavior = new SoapLoggerBehavior(_logger);
+                    client.Endpoint.EndpointBehaviors.Add(behavior);
+                }
+                var (userName, password) = GetUserNamePassword(_options.Value.ReceiveSearchDataService);
+                client.ClientCredentials.UserName.UserName = userName;
+                client.ClientCredentials.UserName.Password = password;
+                var response = await client.ReceiveSearchDataAsync(searchData);
 
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, response, TransactionTypeEnum.SearchData, false);
 
@@ -422,15 +451,30 @@ namespace ReswareConnectorWeb.Services
             return searchResponse;
         }
 
-        private async Task<ReceiveActionEventResponseDto> SendActionEventAsync(IReceiveActionEventServiceWrapper serviceWrapper, ReceiveActionEventData request, long trxnItemId)
+        private async Task<ReceiveActionEventResponseDto> SendActionEventAsync(ReceiveActionEventData request, long trxnItemId)
         {
             ReceiveActionEventResponseDto eventResponse = new();
+            if (_options.Value.ReceiveActionEventService.BypassServiceCall)
+            {
+                return eventResponse;
+            }
             try
             {
                 var fileNumber = string.IsNullOrWhiteSpace(request.FileNumber) ? "UnknownFileNumber" : request.FileNumber;
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, request, TransactionTypeEnum.ActionEvent, true);
 
-                ReceiveActionEventResponse response = await serviceWrapper.ReceiveActionEventAsync(request);
+                var binding = CreateBinding();
+                var endpointAddress = CreateEndpointAddress(_options.Value.ReceiveActionEventService.ServiceUrl);
+                var client = new ReceiveActionEventServiceClient(binding, endpointAddress);
+                if (_options.Value.CustomFieldService.LogSoapMessages)
+                {
+                    var behavior = new SoapLoggerBehavior(_logger);
+                    client.Endpoint.EndpointBehaviors.Add(behavior);
+                }
+                var (userName, password) = GetUserNamePassword(_options.Value.ReceiveActionEventService);
+                client.ClientCredentials.UserName.UserName = userName;
+                client.ClientCredentials.UserName.Password = password;
+                var response = await client.ReceiveActionEventAsync(request);
 
                 await _fileStorageService.StoreDataAsync(fileNumber, trxnItemId, response, TransactionTypeEnum.ActionEvent, false);
 
@@ -453,6 +497,46 @@ namespace ReswareConnectorWeb.Services
             eventResponse.FileNumber = request.FileNumber;
             eventResponse.AwaitDeferredResponse = eventResponse.ResponseCodeName == ReceiveActionEventResponseCode.UNEXPECTED_ERROR;
             return eventResponse;
+        }
+
+
+        protected virtual CustomBinding CreateBinding()
+        {
+            _logger.LogInformation("CreateBinding");
+            // 1. Bootstrap: UserName over HTTPS
+            var bootstrap = SecurityBindingElement.CreateUserNameOverTransportBindingElement();
+            bootstrap.IncludeTimestamp = true;
+            bootstrap.MessageSecurityVersion =
+                MessageSecurityVersion
+                    .WSSecurity11WSTrustFebruary2005WSSecureConversationFebruary2005WSSecurityPolicy11BasicSecurityProfile10;
+            bootstrap.LocalClientSettings.DetectReplays = false;
+
+            // 2. SecureConversation wrapper
+            var security = SecurityBindingElement.CreateSecureConversationBindingElement(bootstrap);
+            security.DefaultAlgorithmSuite = SecurityAlgorithmSuite.Default;
+            security.IncludeTimestamp = false;
+            security.MessageSecurityVersion = bootstrap.MessageSecurityVersion;
+            security.LocalClientSettings.DetectReplays = false;
+
+            // 3. Binary message encoding
+            var encoding = new BinaryMessageEncodingBindingElement
+            {
+                MessageVersion = MessageVersion.Soap12WSAddressing10
+            };
+
+            // 4. HTTPS transport
+            var transport = new HttpsTransportBindingElement
+            {
+                RequireClientCertificate = false
+            };
+
+            // 5. Final binding
+            return new CustomBinding(security, encoding, transport);
+        }
+
+        protected virtual EndpointAddress CreateEndpointAddress(string serviceUrl)
+        {
+            return new EndpointAddress(serviceUrl);
         }
 
 
@@ -654,8 +738,7 @@ namespace ReswareConnectorWeb.Services
                 throw;
             }
 
-            using var serviceWrapper = _serviceWrapperFactory.CreateReceiveActionEventService();
-            actionEventResponse = await SendActionEventAsync(serviceWrapper, request, transactionItem.TransactionItemId);
+            actionEventResponse = await SendActionEventAsync(request, transactionItem.TransactionItemId);
             actionEventResponse.TransactionReferenceNumber = transaction.TransactionId;
             actionEventResponse.AwaitDeferredResponse = actionEventResponse.ResponseCodeName == ReceiveActionEventResponseCode.UNEXPECTED_ERROR;
             transactionItem.Processed = !actionEventResponse.AwaitDeferredResponse;
@@ -828,7 +911,7 @@ namespace ReswareConnectorWeb.Services
                     query = query.Where(t => t.ReceivedTime > cutoffReceivedTime);
                 }
 
-                transactions = await query.OrderBy(t => t.FileNumber).ThenBy(t=> t.TransactionTypeId).ToListAsync();
+                transactions = await query.OrderBy(t => t.FileNumber).ThenBy(t => t.TransactionTypeId).ToListAsync();
             }
             catch (Exception ex)
             {
@@ -836,150 +919,129 @@ namespace ReswareConnectorWeb.Services
                 return;
             }
 
-            Lazy<ICustomFieldServiceWrapper> customFieldServiceWrapper = new Lazy<ICustomFieldServiceWrapper>(() => _serviceWrapperFactory.CreateCustomFieldService());
-            Lazy<IReceiveNoteServiceWrapper> noteServiceWrapper = new Lazy<IReceiveNoteServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveNoteService());
-            Lazy<IReceiveSearchDataServiceWrapper> searchServiceWrapper = new Lazy<IReceiveSearchDataServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveSearchDataService());
-            Lazy<IReceiveActionEventServiceWrapper> eventServiceWrapper = new Lazy<IReceiveActionEventServiceWrapper>(() => _serviceWrapperFactory.CreateReceiveActionEventService());
 
-            try
+            foreach (var transactionItem in transactions.SelectMany(t => t.Items))
             {
-                foreach (var transactionItem in transactions.SelectMany(t=>t.Items))
+                if (cancellationToken.IsCancellationRequested) return;
+
+                bool isProcessed = false;
+                bool isResponseSent = false;
+
+                if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.CustomFields)
                 {
-                    if (cancellationToken.IsCancellationRequested) return;
-
-                    bool isProcessed = false;
-                    bool isResponseSent = false;
-
-                    if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.CustomFields)
-                    {
-                        try
-                        {
-                            var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
-                            var response = await SendCustomFieldsAsync(customFieldServiceWrapper.Value, request, transactionItem.TransactionItemId);
-
-                            var txResponse = new TransactionResponse
-                            {
-                                TransactionItemId = transactionItem.TransactionItemId,
-                                ResponseCode = response ? 0 : -1,
-                                ResponseMessage = response ? "CustomFields Updated" : "CustomFields Updated Failed",
-                                ReceivedTime = DateTime.Now
-                            };
-                            _dbContext.TransactionResponses.Add(txResponse);
-                            isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.CustomFields, txResponse);
-                            isProcessed = response;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Error while reprocessing CustomFields Update request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
-                        }
-                    }
-                    else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.NoteDocument)
-                    {
-                        try
-                        {
-                            var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
-                            var response = await SendNoteDataAsync(noteServiceWrapper.Value, request, transactionItem.TransactionItemId);
-
-                            var txResponse = new TransactionResponse
-                            {
-                                TransactionItemId = transactionItem.TransactionItemId,
-                                ResponseCode = response.ResponseCode,
-                                ResponseMessage = response.Message,
-                                ReceivedTime = DateTime.Now
-                            };
-                            _dbContext.TransactionResponses.Add(txResponse);
-                            isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.NoteDocument, txResponse);
-                            isProcessed = response.ResponseCodeName != ReceiveNoteResponseCode.UNEXPECTED_ERROR;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Error while reprocessing NoteDocument request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
-                        }
-                    }
-                    else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.SearchData)
-                    {
-                        try
-                        {
-                            var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
-                            if (request != null && request.SearchData != null)
-                            {
-                                ExtractCustomFields(request.SearchData);//Updates the original Search data by removing CustomField related Liens and Easements
-                            }
-                            var response = await SendSearchDataAsync(searchServiceWrapper.Value, request, transactionItem.TransactionItemId);
-
-                            var txResponse = new TransactionResponse
-                            {
-                                TransactionItemId = transactionItem.TransactionItemId,
-                                ResponseCode = response.ResponseCode,
-                                ResponseMessage = response.Message,
-                                ReceivedTime = DateTime.Now
-                            };
-                            _dbContext.TransactionResponses.Add(txResponse);
-                            isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.SearchData, txResponse);
-                            isProcessed = response.ResponseCodeName != ReceiveSearchDataResponseCode.UNEXPECTED_ERROR;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Error while reprocessing SearchData request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
-                        }
-                    }
-                    else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.ActionEvent)
-                    {
-                        try
-                        {
-                            var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
-                            var response = await SendActionEventAsync(eventServiceWrapper.Value, request.ActionEventData, transactionItem.TransactionItemId);
-
-                            var txResponse = new TransactionResponse
-                            {
-                                TransactionItemId = transactionItem.TransactionItemId,
-                                ResponseCode = (int)response.ResponseCode,
-                                ResponseMessage = response.Message,
-                                ReceivedTime = DateTime.Now
-                            };
-                            _dbContext.TransactionResponses.Add(txResponse);
-                            isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.ActionEvent, txResponse);
-                            isProcessed = response.ResponseCodeName != ReceiveActionEventResponseCode.UNEXPECTED_ERROR;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Failed (re)sending actionevent request for {transactionItem.Transaction.FileNumber}, Transaction (Id:{transactionItem.TransactionId}) . Error: {ex.Message}");
-                        }
-                    }
-
                     try
                     {
-                        transactionItem.RetryCount = (byte)((transactionItem.RetryCount ?? (byte)0) + 1);
-                        transactionItem.Processed = isProcessed;
-                        transactionItem.ResponseSent = isResponseSent;
-                        transactionItem.LastUpdatedTime = DateTime.Now;
-                        await _dbContext.SaveChangesAsync();
+                        var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                        var response = await SendCustomFieldsAsync(request, transactionItem.TransactionItemId);
 
-                        if(_dbContext.TransactionItems.Where(ti=> ti.TransactionId == transactionItem.TransactionId).All(ti=>ti.Processed))
+                        var txResponse = new TransactionResponse
                         {
-                            transactionItem.Transaction.Processed = true;
-                            await _dbContext.SaveChangesAsync();
-                        }
+                            TransactionItemId = transactionItem.TransactionItemId,
+                            ResponseCode = response ? 0 : -1,
+                            ResponseMessage = response ? "CustomFields Updated" : "CustomFields Updated Failed",
+                            ReceivedTime = DateTime.Now
+                        };
+                        _dbContext.TransactionResponses.Add(txResponse);
+                        isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.CustomFields, txResponse);
+                        isProcessed = response;
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Failed to update Transaction (Id:{transactionItem.TransactionId}) for FileNumber {transactionItem.Transaction.FileNumber}. Error: {ex.Message}");
+                        _logger.LogError(ex, $"Error while reprocessing CustomFields Update request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
                     }
                 }
-            }
-            finally
-            {
-                if (customFieldServiceWrapper.IsValueCreated)
-                    customFieldServiceWrapper.Value.Dispose();
+                else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.NoteDocument)
+                {
+                    try
+                    {
+                        var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                        var response = await SendNoteDataAsync(request, transactionItem.TransactionItemId);
 
-                if (noteServiceWrapper.IsValueCreated)
-                    noteServiceWrapper.Value.Dispose();
+                        var txResponse = new TransactionResponse
+                        {
+                            TransactionItemId = transactionItem.TransactionItemId,
+                            ResponseCode = response.ResponseCode,
+                            ResponseMessage = response.Message,
+                            ReceivedTime = DateTime.Now
+                        };
+                        _dbContext.TransactionResponses.Add(txResponse);
+                        isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.NoteDocument, txResponse);
+                        isProcessed = response.ResponseCodeName != ReceiveNoteResponseCode.UNEXPECTED_ERROR;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error while reprocessing NoteDocument request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
+                    }
+                }
+                else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.SearchData)
+                {
+                    try
+                    {
+                        var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                        if (request != null && request.SearchData != null)
+                        {
+                            ExtractCustomFields(request.SearchData);//Updates the original Search data by removing CustomField related Liens and Easements
+                        }
+                        var response = await SendSearchDataAsync(request, transactionItem.TransactionItemId);
 
-                if (searchServiceWrapper.IsValueCreated)
-                    searchServiceWrapper.Value.Dispose();
+                        var txResponse = new TransactionResponse
+                        {
+                            TransactionItemId = transactionItem.TransactionItemId,
+                            ResponseCode = response.ResponseCode,
+                            ResponseMessage = response.Message,
+                            ReceivedTime = DateTime.Now
+                        };
+                        _dbContext.TransactionResponses.Add(txResponse);
+                        isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.SearchData, txResponse);
+                        isProcessed = response.ResponseCodeName != ReceiveSearchDataResponseCode.UNEXPECTED_ERROR;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error while reprocessing SearchData request for FileNumber: {transactionItem.Transaction.FileNumber}, TransactionID: {transactionItem.TransactionId}");
+                    }
+                }
+                else if (transactionItem.TransactionTypeId == (byte)TransactionTypeEnum.ActionEvent)
+                {
+                    try
+                    {
+                        var request = await _fileStorageService.RetrieveTransactionDataAsync<OrderDto>(transactionItem.Transaction);
+                        var response = await SendActionEventAsync(request.ActionEventData, transactionItem.TransactionItemId);
 
-                if (eventServiceWrapper.IsValueCreated)
-                    eventServiceWrapper.Value.Dispose();
+                        var txResponse = new TransactionResponse
+                        {
+                            TransactionItemId = transactionItem.TransactionItemId,
+                            ResponseCode = (int)response.ResponseCode,
+                            ResponseMessage = response.Message,
+                            ReceivedTime = DateTime.Now
+                        };
+                        _dbContext.TransactionResponses.Add(txResponse);
+                        isResponseSent = await UpdateTransactionStatusAsync(transactionItem, TransactionTypeEnum.ActionEvent, txResponse);
+                        isProcessed = response.ResponseCodeName != ReceiveActionEventResponseCode.UNEXPECTED_ERROR;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed (re)sending actionevent request for {transactionItem.Transaction.FileNumber}, Transaction (Id:{transactionItem.TransactionId}) . Error: {ex.Message}");
+                    }
+                }
+
+                try
+                {
+                    transactionItem.RetryCount = (byte)((transactionItem.RetryCount ?? (byte)0) + 1);
+                    transactionItem.Processed = isProcessed;
+                    transactionItem.ResponseSent = isResponseSent;
+                    transactionItem.LastUpdatedTime = DateTime.Now;
+                    await _dbContext.SaveChangesAsync();
+
+                    if (_dbContext.TransactionItems.Where(ti => ti.TransactionId == transactionItem.TransactionId).All(ti => ti.Processed))
+                    {
+                        transactionItem.Transaction.Processed = true;
+                        await _dbContext.SaveChangesAsync();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Failed to update Transaction (Id:{transactionItem.TransactionId}) for FileNumber {transactionItem.Transaction.FileNumber}. Error: {ex.Message}");
+                }
             }
         }
 
@@ -1254,5 +1316,12 @@ namespace ReswareConnectorWeb.Services
         }
 
         #endregion Apply Transaction Data Retention
+
+        private (string, string) GetUserNamePassword(ServiceConfiguration config)
+        {
+            var userName = Utilities.GetEnvironmentVariableAnywhere(config.UserNameVariable) ?? throw new ArgumentNullException($"{config.UserNameVariable} environment variable is required");
+            var password = Utilities.GetEnvironmentVariableAnywhere(config.PasswordVariable) ?? throw new ArgumentNullException($"{config.PasswordVariable} environment variable is required");
+            return (userName, password);
+        }
     }
 }
