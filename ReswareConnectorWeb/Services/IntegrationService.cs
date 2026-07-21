@@ -325,9 +325,17 @@ namespace ReswareConnectorWeb.Services
                     {
                         if(_options.Value.CustomFieldService.BypassServiceCall)
                         {
+                            _logger.LogWarning($"BypassServiceCall was enabled so skipping CustomField API call for FileID {order.FileID.Value}");
                             return true;
                         }
-                        customFieldsUpdated = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID.Value, customFields);
+                        var fileNumber = order.SearchData?.FileNumber ?? "UnknownFileNumber";
+                        await _fileStorageService.StoreDataAsJsonAsync(fileNumber, trxnItemId, customFields, TransactionTypeEnum.CustomFields, true);
+
+                        _logger.LogWarning($"Calling CustomField API call for FileID {order.FileID.Value}");
+                        (customFieldsUpdated, var response) = await serviceWrapper.UpdateCustomFieldsAsync(order.FileID.Value, customFields);
+
+                        _logger.LogWarning($"CustomField API call for FileID {order.FileID.Value} was successful.");
+                        await _fileStorageService.StoreDataAsJsonAsync(fileNumber, trxnItemId, response, TransactionTypeEnum.CustomFields, false);
                     }
                 }
             }

@@ -25,5 +25,6 @@ namespace ReswareConnectorWeb.Services
         string? GetResponseData(string dataPath, TransactionTypeEnum documentType);
 
         Task StoreDataAsync<T>(string fileNumber, long trxnItemId, T requestData, TransactionTypeEnum transactionType, bool isRequest);
+        Task StoreDataAsJsonAsync<T>(string fileNumber, long trxnItemId, T requestData, TransactionTypeEnum transactionType, bool isRequest);
     }
 }

@@ -2,6 +2,7 @@
 using ReswareConnectorWeb.Models;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -19,7 +20,8 @@ namespace ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS
 
             var handler = new HttpClientHandler
             {
-                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true // Only for development
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true, // Only for development
+                AllowAutoRedirect = false
             };
 
             _httpClient = new HttpClient(handler);
@@ -30,17 +32,27 @@ namespace ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
         }
 
-        public async Task<bool> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
+        public async Task<(bool, string)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
         {
             var url = $"{_baseUrl}/files/{fileId}/customfields";
 
-            var xmlPayload = SerializeToXml(customFields);
-            var content = new StringContent(xmlPayload, Encoding.UTF8, "application/xml");
+            var jsonPayload = SerializeToJson(customFields);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync(url, content);
             response.EnsureSuccessStatusCode();
 
-            return true;
+            return (true, response.ToString());
+        }
+
+        private string SerializeToJson(FileCustomFields customFields)
+        {
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+            return JsonSerializer.Serialize(customFields, options);
         }
 
         private string SerializeToXml(FileCustomFields customFields)

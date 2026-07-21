@@ -13,7 +13,7 @@ namespace ReswareConnectorWeb.ReswareServices
         {
         }
 
-        public async Task<bool> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
+        public async Task<(bool, string)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
         {
             return await ExecuteWithRetryAsync(
                 () => _client.UpdateCustomFieldsAsync(fileId, customFields),

@@ -39,6 +39,15 @@ namespace ReswareConnectorWeb.Services
             await IOHelper.CreateXmlFileAsync(requestData, targetXmlFile);
         }
 
+        public async Task StoreDataAsJsonAsync<T>(string fileNumber, long trxnItemId, T requestData, TransactionTypeEnum transactionType, bool isRequest)
+        {
+            var targetPath = Path.Combine(_config.LocalStorageRoot, fileNumber);
+            var targetJsonFile = Path.Combine(targetPath, $"{DateTime.Now.ToString("yyyyMMddHHmmss")}_{trxnItemId}_{transactionType.ToString()}_" + (isRequest ? "Request" : "Response"));
+
+            IOHelper.CreateDirectory(targetPath);
+            await IOHelper.CreateJsonFileAsync(requestData, targetJsonFile);
+        }
+
         public async Task<string> StoreTransactionResponseDataAsync<T>(T responseData, string relativePath, TransactionTypeEnum transactionType)
         {
             var targetPath = Path.Combine(_config.LocalStorageRoot, relativePath);
