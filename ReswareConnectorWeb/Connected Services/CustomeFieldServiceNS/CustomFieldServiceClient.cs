@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Serialization;
+using YamlDotNet.Core.Tokens;
 
 namespace ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS
 {
@@ -32,17 +33,26 @@ namespace ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
         }
 
-        public async Task<(bool, string)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
+        public async Task<(bool, object)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields)
         {
             var url = $"{_baseUrl}/files/{fileId}/customfields";
 
             var jsonPayload = SerializeToJson(customFields);
             var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(url, content);
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = content
+            };
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            var response = await _httpClient.SendAsync(request);
             response.EnsureSuccessStatusCode();
 
-            return (true, response.ToString());
+            var responseData = await response.Content.ReadAsStringAsync();
+            var json = JsonDocument.Parse(responseData);
+
+            return (true, json);
         }
 
         private string SerializeToJson(FileCustomFields customFields)
@@ -53,37 +63,6 @@ namespace ReswareConnectorWeb.Connected_Services.CustomeFieldServiceNS
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             return JsonSerializer.Serialize(customFields, options);
-        }
-
-        private string SerializeToXml(FileCustomFields customFields)
-        {
-            var serializer = new XmlSerializer(typeof(FileCustomFields));
-
-            // Create namespaces to match the exact format
-            var namespaces = new XmlSerializerNamespaces();
-            namespaces.Add("i", "http://www.w3.org/2001/XMLSchema-instance");
-            // Don't add a default namespace here - it's handled by the XmlRoot attribute
-
-            var settings = new XmlWriterSettings
-            {
-                Indent = true,
-                IndentChars = "    ",
-                Encoding = System.Text.Encoding.UTF8,
-                OmitXmlDeclaration = false
-            };
-
-            using var stringWriter = new StringWriter();
-            using var xmlWriter = XmlWriter.Create(stringWriter, settings);
-            serializer.Serialize(xmlWriter, customFields, namespaces);
-            return stringWriter.ToString();
-        }
-
-
-        private FileCustomFields? DeserializeFromXml(string xml)
-        {
-            var serializer = new XmlSerializer(typeof(FileCustomFields));
-            using var stringReader = new StringReader(xml);
-            return serializer.Deserialize(stringReader) as FileCustomFields;
         }
 
         public void Dispose()

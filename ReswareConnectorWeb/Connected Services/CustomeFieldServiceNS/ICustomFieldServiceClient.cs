@@ -4,6 +4,6 @@ namespace ReswareConnectorWeb.CustomeFieldServiceNS
 {
     public interface ICustomFieldServiceClient : IDisposable
     {
-        Task<(bool, string)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields);
+        Task<(bool, object)> UpdateCustomFieldsAsync(long fileId, FileCustomFields customFields);
     }
 }
